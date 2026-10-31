@@ -20,10 +20,11 @@ Voir [`docs/roadmap.md`](./docs/roadmap.md). Réalisé :
 - 3 projets Flutter scaffoldés avec thème partagé (`docuciv_design_system`)
 - `codemagic.yaml` : workflows `integration` (distribution interne) et `main` (soumission store) par app, voir `docs/workflow.md` §5
 
+Les 3 apps Flutter + le package partagé ont été vérifiés (`flutter pub get`/`analyze`/`test`, Flutter 3.24.2) — tout passe.
+
 Restant pour clore la Phase 0 :
 - Protection des branches `integration`/`main` sur l'hébergeur Git (à configurer côté plateforme — pas du code, voir note ci-dessous)
 - Environnements dev/staging/prod séparés + coffre de secrets (Vault/Secrets Manager + Codemagic) réellement provisionnés
-- **Non vérifié dans cet environnement** : le SDK Flutter n'est pas installé ici, donc les scaffolds Flutter (`pubspec.yaml`, `main.dart`, tests widgets) n'ont pas pu être validés avec `flutter pub get` / `flutter analyze` / `flutter test`. À valider avant de merger sur `integration`.
 
 ### Protection de branches
 
