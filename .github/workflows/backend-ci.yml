@@ -14,6 +14,17 @@ defaults:
     working-directory: backend
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
   lint-and-test:
     runs-on: ubuntu-latest
     services:
@@ -45,17 +56,28 @@ jobs:
       - name: Type check (mypy)
         run: mypy app
 
-      - name: Dependency & secret scan (SCA)
-        run: pip install pip-audit && pip-audit --strict || true # TODO: make blocking once baseline is clean (security.md §10)
+      - name: Dependency vulnerability scan (SCA, blocking on critical/high)
+        run: pip install pip-audit && pip-audit --strict
 
-      - name: Run smoke tests
+      - name: Run smoke tests + BOLA/RLS isolation tests
         env:
           DOCUCIV_DATABASE_URL: postgresql+asyncpg://docuciv:docuciv@localhost:5432/docuciv
           DOCUCIV_REDIS_URL: redis://localhost:6379/0
+          # Enables tests/test_rls_isolation.py — the AGENTS.md règle 8 /
+          # docs/security.md §4 merge gate proving RLS actually blocks
+          # cross-tenant reads, not just that a tenant_id column exists.
+          DOCUCIV_TEST_DATABASE_URL: postgresql+asyncpg://docuciv:docuciv@localhost:5432/docuciv
         run: pytest -q
 
       - name: Build Docker image
         run: docker build -t docuciv-backend:${{ github.sha }} .
+
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: docuciv-backend:${{ github.sha }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
 
   e2e-staging:
     # e2e only runs on integration pushes, never on feature-branch PRs (docs/workflow.md §1/§2)

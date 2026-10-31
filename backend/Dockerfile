@@ -7,7 +7,13 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    && groupadd --system docuciv \
+    && useradd --system --gid docuciv --no-create-home --shell /usr/sbin/nologin docuciv \
+    && chown -R docuciv:docuciv /app
+
+# Non-root container user (docs/security.md §10 "durcissement infra").
+USER docuciv
 
 EXPOSE 8000
 

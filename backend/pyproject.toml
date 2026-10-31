@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "DocuCiv backend API (FastAPI, multi-tenant, RLS)"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115,<0.116",
+    # Lower bounds set to the earliest version with no known CVE as of this
+    # writing (pip-audit, docs/security.md §10); no upper pin on the
+    # fastapi/starlette pair so security patches aren't blocked, but they're
+    # tested together in CI before any bump lands on integration/main.
+    "fastapi>=0.118.3",
+    "starlette>=1.3.1",
     "uvicorn[standard]>=0.32,<0.33",
     "pydantic>=2.9,<3",
     "pydantic-settings>=2.5,<3",
@@ -13,15 +18,19 @@ dependencies = [
     "alembic>=1.13,<1.14",
     "celery[redis]>=5.4,<5.5",
     "redis>=5.0,<6",
-    "python-jose[cryptography]>=3.3,<3.4",
-    "cryptography>=43.0,<44",
+    # PyJWT instead of python-jose: python-jose is unmaintained and carries
+    # multiple open CVEs (PYSEC-2024-232/233) plus a vulnerable ecdsa
+    # transitive dependency (PYSEC-2026-1325) — found via pip-audit
+    # (docs/security.md §10 supply-chain scanning).
+    "pyjwt[crypto]>=2.9,<3",
+    "cryptography>=50.0",
     "structlog>=24.4,<25",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9",
-    "pytest-asyncio>=0.24,<0.25",
+    "pytest>=8.4",
+    "pytest-asyncio>=1.0",
     "httpx>=0.27,<0.28",
     "ruff>=0.7,<0.8",
     "mypy>=1.13,<1.14",
@@ -37,6 +46,10 @@ exclude = ["alembic/versions", "alembic/env.py", ".venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends(...) default-argument idiom is the documented
+# pattern for dependency injection, not the mutable-default footgun B008
+# normally guards against.
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -44,4 +57,5 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
