@@ -16,6 +16,7 @@ class OwnerBackofficeApp extends StatelessWidget {
     return MaterialApp(
       title: 'DocuCiv — Owner Backoffice',
       theme: DocuCivTheme.light(),
+      darkTheme: DocuCivTheme.dark(),
       home: const TenantsScreen(),
     );
   }
@@ -28,7 +29,11 @@ class TenantsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Administrations (tenants)')),
-      body: const Center(child: Text('Aucun tenant')),
+      body: const DocuCivEmptyState(
+        icon: Icons.apartment_outlined,
+        title: 'Aucun tenant',
+        message: 'Les administrations partenaires apparaîtront ici une fois onboardées.',
+      ),
     );
   }
 }

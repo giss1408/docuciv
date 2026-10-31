@@ -15,6 +15,7 @@ class AdminPortalApp extends StatelessWidget {
     return MaterialApp(
       title: 'DocuCiv — Admin Portal',
       theme: DocuCivTheme.light(),
+      darkTheme: DocuCivTheme.dark(),
       home: const RequestQueueScreen(),
     );
   }
@@ -27,7 +28,11 @@ class RequestQueueScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('File de demandes')),
-      body: const Center(child: Text('Aucune demande en revue')),
+      body: const DocuCivEmptyState(
+        icon: Icons.fact_check_outlined,
+        title: 'Aucune demande en revue',
+        message: 'Les nouvelles demandes apparaîtront ici dès qu\'un citoyen en soumet une.',
+      ),
     );
   }
 }

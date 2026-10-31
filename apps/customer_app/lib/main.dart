@@ -13,6 +13,7 @@ class CustomerApp extends StatelessWidget {
     return MaterialApp(
       title: 'DocuCiv',
       theme: DocuCivTheme.light(),
+      darkTheme: DocuCivTheme.dark(),
       home: const HomeScreen(),
     );
   }
@@ -25,7 +26,12 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('DocuCiv')),
-      body: const Center(child: Text('Mes démarches')),
+      body: const SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(DocuCivSpacing.md),
+          child: DocuCivSectionHeader(title: 'Mes démarches'),
+        ),
+      ),
     );
   }
 }
