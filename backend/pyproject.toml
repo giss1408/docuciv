@@ -1,0 +1,47 @@
+[project]
+name = "docuciv-backend"
+version = "0.1.0"
+description = "DocuCiv backend API (FastAPI, multi-tenant, RLS)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<0.116",
+    "uvicorn[standard]>=0.32,<0.33",
+    "pydantic>=2.9,<3",
+    "pydantic-settings>=2.5,<3",
+    "sqlalchemy[asyncio]>=2.0,<2.1",
+    "asyncpg>=0.29,<0.30",
+    "alembic>=1.13,<1.14",
+    "celery[redis]>=5.4,<5.5",
+    "redis>=5.0,<6",
+    "python-jose[cryptography]>=3.3,<3.4",
+    "cryptography>=43.0,<44",
+    "structlog>=24.4,<25",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<0.25",
+    "httpx>=0.27,<0.28",
+    "ruff>=0.7,<0.8",
+    "mypy>=1.13,<1.14",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["alembic/versions", "alembic/env.py", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

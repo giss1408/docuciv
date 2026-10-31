@@ -1,0 +1,113 @@
+workflows:
+  customer-integration:
+    name: Customer App - Integration (internal distribution)
+    environment:
+      flutter: stable
+      groups:
+        - google_play_internal
+        - app_store_connect
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: integration
+    working_directory: apps/customer_app
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build appbundle --release
+      - flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    publishing:
+      firebase_app_distribution:
+        android:
+          groups: [internal-testers]
+      app_store_connect:
+        auth: integration
+
+  customer-production:
+    name: Customer App - Production (store submission)
+    environment:
+      flutter: stable
+      groups:
+        - google_play_production
+        - app_store_connect
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: main
+    working_directory: apps/customer_app
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build appbundle --release --obfuscate --split-debug-info=build/symbols
+      - flutter build ipa --release --obfuscate --split-debug-info=build/symbols
+    publishing:
+      google_play:
+        track: internal # promotion vers production = action humaine dans Play Console
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+      app_store_connect:
+        auth: production
+        submit_to_testflight: true
+
+  admin-portal-integration:
+    name: Admin Portal - Integration (internal web deploy)
+    environment:
+      flutter: stable
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: integration
+    working_directory: apps/admin_portal
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build web --release
+    # Déployé vers l'hébergement statique staging (voir architecture.md) — pas
+    # de soumission store, Admin Portal n'est distribué que via le Web.
+
+  admin-portal-production:
+    name: Admin Portal - Production (web deploy)
+    environment:
+      flutter: stable
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: main
+    working_directory: apps/admin_portal
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build web --release
+
+  owner-backoffice-integration:
+    name: Owner Backoffice - Integration (internal web deploy)
+    environment:
+      flutter: stable
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: integration
+    working_directory: apps/owner_backoffice
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build web --release
+
+  owner-backoffice-production:
+    name: Owner Backoffice - Production (web deploy)
+    environment:
+      flutter: stable
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: main
+    working_directory: apps/owner_backoffice
+    scripts:
+      - flutter pub get
+      - flutter analyze
+      - flutter test
+      - flutter build web --release

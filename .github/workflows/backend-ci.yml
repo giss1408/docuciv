@@ -1,0 +1,68 @@
+name: backend-ci
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+  push:
+    branches: [integration, main]
+    paths:
+      - "backend/**"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: docuciv
+          POSTGRES_PASSWORD: docuciv
+          POSTGRES_DB: docuciv
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U docuciv"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check app tests
+
+      - name: Type check (mypy)
+        run: mypy app
+
+      - name: Dependency & secret scan (SCA)
+        run: pip install pip-audit && pip-audit --strict || true # TODO: make blocking once baseline is clean (security.md §10)
+
+      - name: Run smoke tests
+        env:
+          DOCUCIV_DATABASE_URL: postgresql+asyncpg://docuciv:docuciv@localhost:5432/docuciv
+          DOCUCIV_REDIS_URL: redis://localhost:6379/0
+        run: pytest -q
+
+      - name: Build Docker image
+        run: docker build -t docuciv-backend:${{ github.sha }} .
+
+  e2e-staging:
+    # e2e only runs on integration pushes, never on feature-branch PRs (docs/workflow.md §1/§2)
+    if: github.ref == 'refs/heads/integration' && github.event_name == 'push'
+    needs: lint-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder — e2e suite runs here once Phase 2+ ships
+        run: echo "e2e backlog to be executed against staging at end of each phase (roadmap.md)"
