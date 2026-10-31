@@ -1,6 +1,6 @@
 # DocuCiv
 
-Plateforme SaaS de sécurisation des documents administratifs en Côte d'Ivoire. Voir [`concept.md`](./concept.md) et [`AGENTS.md`](./AGENTS.md) pour le contexte complet et les règles de travail.
+Plateforme SaaS de sécurisation des documents administratifs en Côte d'Ivoire. Voir [`concept.md`](./concept.md) et [`AGENTS.md`](./AGENTS.md) pour le contexte complet et les règles de travail, et [`NEXT_STEPS.md`](./NEXT_STEPS.md) pour ce qui reste à faire.
 
 ## Structure du dépôt
 
