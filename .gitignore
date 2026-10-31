@@ -6,3 +6,15 @@ backend/.pytest_cache/
 backend/.mypy_cache/
 backend/.ruff_cache/
 backend/.env
+
+# Flutter/Dart build artifacts
+apps/*/.dart_tool/
+apps/*/build/
+apps/*/android/
+apps/*/ios/
+apps/*/.flutter-plugins
+apps/*/.flutter-plugins-dependencies
+
+# pubspec.lock is committed for apps (reproducible builds) but not for
+# the shared library package, per Dart package conventions.
+apps/docuciv_design_system/pubspec.lock
