@@ -27,7 +27,9 @@ Demande une URL pré-signée S3 pour téléverser la pièce justificative (photo
 // Request
 { "mime_type": "image/jpeg", "file_size_bytes": 2400000 }
 // Response 201
-{ "evidence_id": "uuid", "upload_url": "https://...", "expires_in": 300 }
+{ "evidence_id": "uuid", "upload_url": "https://...", "upload_fields": { "key": "...", "policy": "..." }, "expires_in": 300 }
+// POST multipart vers upload_url avec upload_fields puis le fichier (POST pré-signé: S3 applique
+// la taille max et le Content-Type exact).
 ```
 
 ### `POST /requests/{id}/evidence/{evidence_id}/complete`

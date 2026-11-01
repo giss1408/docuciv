@@ -18,6 +18,21 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://docuciv_owner:docuciv_owner@localhost:5432/docuciv"
     )
     redis_url: str = "redis://localhost:6379/0"
+    # Stockage S3-compatible (MinIO en dev). SSE-KMS activé si s3_kms_key_id est renseigné.
+    s3_endpoint_url: str | None = "http://localhost:9000"
+    s3_bucket: str = "docuciv-dev"
+    s3_region: str = "us-east-1"
+    s3_access_key_id: str = "minioadmin"
+    s3_secret_access_key: str = "minioadmin"
+    s3_kms_key_id: str | None = None
+    evidence_max_bytes: int = 10 * 1024 * 1024
+    evidence_max_pixels: int = 40_000_000
+    evidence_max_per_request: int = 5
+    upload_url_ttl_seconds: int = 300
+    # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
+    antivirus: Literal["clamav", "disabled"] = "disabled"
+    clamd_host: str = "localhost"
+    clamd_port: int = 3310
     # Tarif provisoire (FCFA) en attendant la configuration par tenant/type (concept.md §4).
     default_amount_due_fcfa: int = 1000
 
@@ -36,6 +51,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"{name} utilise une valeur de dev en environnement {self.environment}"
                 )
+        if self.s3_secret_access_key == "minioadmin" or self.antivirus == "disabled":
+            raise ValueError("stockage/antivirus de dev interdits hors environnement dev")
         return self
 
 

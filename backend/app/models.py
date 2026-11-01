@@ -104,6 +104,18 @@ class NotificationSendStatus(enum.StrEnum):
     skipped_duplicate = "skipped_duplicate"
 
 
+class UploadStatus(enum.StrEnum):
+    awaiting_upload = "awaiting_upload"
+    validated = "validated"
+    rejected = "rejected"
+
+
+class ReviewStatus(enum.StrEnum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -180,4 +192,35 @@ class NotificationEvent(Base):
         Enum(NotificationSendStatus, name="notification_send_status")
     )
     idempotency_key: Mapped[str] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SourceEvidence(Base):
+    """Pièce justificative (photo/scan). Fichier sur S3 uniquement, jamais en base.
+
+    `upload_status` couvre la validation technique (complete); `review_status` n'est renseigné
+    qu'une fois le fichier validé et attend l'agent émetteur (AGENTS.md règle 12).
+    """
+
+    __tablename__ = "source_evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_requests.id"), index=True
+    )
+    file_storage_key: Mapped[str] = mapped_column(String(300))
+    declared_mime_type: Mapped[str] = mapped_column(String(64))
+    declared_size_bytes: Mapped[int] = mapped_column()
+    mime_type: Mapped[str | None] = mapped_column(String(64))  # type réel, après validation
+    content_hash: Mapped[str | None] = mapped_column(String(80))
+    upload_status: Mapped[UploadStatus] = mapped_column(Enum(UploadStatus, name="upload_status"))
+    upload_error: Mapped[str | None] = mapped_column(String(64))
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_agents.id")
+    )
+    review_status: Mapped[ReviewStatus | None] = mapped_column(
+        Enum(ReviewStatus, name="review_status")
+    )
+    review_notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

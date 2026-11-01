@@ -19,6 +19,8 @@ class EventType(enum.StrEnum):
     reference_not_found = "reference_not_found"  # §2 #2a
     reference_found = "reference_found"  # §2 #2b
     reference_unverifiable = "reference_unverifiable"  # §3, bascule directe avec avertissement
+    evidence_upload_failed = "evidence_upload_failed"  # §2 #3a
+    evidence_received = "evidence_received"  # §2 #3b
 
 
 async def notify(
@@ -28,8 +30,11 @@ async def notify(
     user_id: uuid.UUID,
     event_type: EventType,
     channels: tuple[NotificationChannel, ...],
+    discriminator: uuid.UUID | None = None,
 ) -> None:
-    key = f"{request_id}:{event_type}"
+    """`discriminator` distingue les occurrences légitimes répétées d'un même événement
+    (ex. plusieurs uploads échoués d'une même demande, chacun doit être notifié)."""
+    key = f"{request_id}:{event_type}" + (f":{discriminator}" if discriminator else "")
     for channel in channels:
         inserted = await session.scalar(
             insert(NotificationEvent)

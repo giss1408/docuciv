@@ -20,6 +20,8 @@ def test_production_accepts_injected_secrets() -> None:
         database_url="postgresql+asyncpg://app:s3cr3t@db.internal:5432/docuciv",
         migration_database_url="postgresql+asyncpg://own:s3cr3t@db.internal:5432/docuciv",
         redis_url="redis://:pw@cache.internal:6379/0",
+        s3_secret_access_key="s3cr3t",
+        antivirus="clamav",
     )
     assert s.environment == "production"
 
@@ -27,3 +29,19 @@ def test_production_accepts_injected_secrets() -> None:
 def test_unknown_environment_rejected() -> None:
     with pytest.raises(ValidationError):
         Settings(environment="prod")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "override", [{"antivirus": "disabled"}, {"s3_secret_access_key": "minioadmin"}]
+)
+def test_production_rejects_dev_storage_or_disabled_antivirus(override: dict) -> None:  # type: ignore[type-arg]
+    base = {
+        "environment": "production",
+        "database_url": "postgresql+asyncpg://app:s3cr3t@db.internal:5432/docuciv",
+        "migration_database_url": "postgresql+asyncpg://own:s3cr3t@db.internal:5432/docuciv",
+        "redis_url": "redis://:pw@cache.internal:6379/0",
+        "s3_secret_access_key": "s3cr3t",
+        "antivirus": "clamav",
+    }
+    with pytest.raises(ValidationError):
+        Settings(**{**base, **override})

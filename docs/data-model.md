@@ -152,7 +152,10 @@ Pièce justificative fournie par le citoyen à l'appui d'une `DocumentRequest` (
 | mime_type | string | Validé côté serveur (pas de confiance sur l'extension client) |
 | uploaded_at | timestamp | |
 | reviewed_by | UUID (FK AdminAgent, nullable) | Agent émetteur ayant examiné la pièce |
-| review_status | enum(`pending`,`accepted`,`rejected`) | |
+| review_status | enum(`pending`,`accepted`,`rejected`) (nullable) | `NULL` tant que l'upload n'est pas validé techniquement; `pending` ensuite |
+| upload_status | enum(`awaiting_upload`,`validated`,`rejected`) | Validation technique (type réel, taille, antivirus, EXIF) faite par `/complete` |
+| upload_error | string (nullable) | Code technique du rejet (`mime_mismatch`, `malware_detected`, ...) |
+| declared_mime_type / declared_size_bytes | string / integer | Déclarés par le client à la demande d'URL; `mime_type` reste le type réel détecté |
 | review_notes | string (nullable) | |
 
 ### Transaction
