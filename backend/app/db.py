@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -25,17 +25,28 @@ def get_engine() -> AsyncEngine:
 
 
 @asynccontextmanager
-async def tenant_session(tenant_id: uuid.UUID) -> AsyncIterator[AsyncSession]:
-    """Session transactionnelle liée à un tenant.
+async def _scoped_session(**context: uuid.UUID) -> AsyncIterator[AsyncSession]:
+    """Session transactionnelle portant le contexte RLS (`app.<clé>`).
 
-    `app.tenant_id` est posé avec set_config(..., is_local=true): la valeur disparaît à la fin
-    de la transaction, donc elle ne fuit jamais vers une autre requête du pool. Les policies RLS
-    de PostgreSQL filtrent sur cette valeur (docs/data-model.md §4).
+    set_config(..., is_local=true): la valeur disparaît à la fin de la transaction, donc elle ne
+    fuit jamais vers une autre requête du pool. Les policies PostgreSQL filtrent sur ces valeurs
+    (docs/data-model.md §4).
     """
     get_engine()
     assert _sessionmaker is not None
     async with _sessionmaker() as session, session.begin():
-        await session.execute(
-            text("SELECT set_config('app.tenant_id', :tid, true)"), {"tid": str(tenant_id)}
-        )
+        for key, value in context.items():
+            await session.execute(
+                text("SELECT set_config(:k, :v, true)"), {"k": f"app.{key}", "v": str(value)}
+            )
         yield session
+
+
+def tenant_session(tenant_id: uuid.UUID) -> AbstractAsyncContextManager[AsyncSession]:
+    """Contexte d'un agent d'administration (tenant)."""
+    return _scoped_session(tenant_id=tenant_id)
+
+
+def user_session(user_id: uuid.UUID) -> AbstractAsyncContextManager[AsyncSession]:
+    """Contexte d'un citoyen/entreprise: ne voit que ses propres lignes."""
+    return _scoped_session(user_id=user_id)

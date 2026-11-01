@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.logging import configure_logging
+from app.routers import requests
 
 
 def create_app() -> FastAPI:
@@ -11,6 +12,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(requests.router)
     return app
 
 
