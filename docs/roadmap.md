@@ -3,9 +3,9 @@
 Stack : backend Python/FastAPI, 3 apps Flutter (Customer iOS/Android/Web, Admin Portal Web, Owner Backoffice Web). Voir `docs/architecture.md`. Budget indicatif initial (250-300k FCFA, `concept.md` §6) correspondait à une v0 minimale ; le périmètre production-grade ci-dessous (multi-tenant, offline, observabilité, 3 apps) dépasse ce budget et doit être re-chiffré avec le client avant engagement.
 
 ## Phase 0 — Fondations techniques
-- [ ] Repo backend FastAPI, structure multi-tenant (Alembic, RLS PostgreSQL)
+- [x] Repo backend FastAPI, structure multi-tenant (Alembic, RLS PostgreSQL)
 - [ ] Modèle de branches `feature/* → integration → main` (voir `docs/workflow.md`), protection des branches `integration`/`main` (pas de commit direct, PR obligatoire)
-- [ ] CI/CD de base (lint, tests, build Docker) pour le backend, déploiement auto vers staging sur `integration` et vers production sur `main`
+- [~] CI/CD de base (lint, tests, build Docker) pour le backend — workflow `.github/workflows/backend.yml` fait, déploiement auto vers staging sur `integration` et vers production sur `main`
 - [ ] 3 projets Flutter initialisés (Customer, Admin Portal, Owner Backoffice) avec thème/design system partagé
 - [ ] `codemagic.yaml` par app Flutter : workflows `integration` (distribution interne Firebase/TestFlight) et `main` (soumission Google Play + App Store) — voir `docs/workflow.md` §5
 - [ ] Environnements dev/staging/production séparés, gestion des secrets (Vault/Secrets Manager + coffre Codemagic pour keystore/certificats)
