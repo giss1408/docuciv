@@ -21,6 +21,8 @@ class EventType(enum.StrEnum):
     reference_unverifiable = "reference_unverifiable"  # §3, bascule directe avec avertissement
     evidence_upload_failed = "evidence_upload_failed"  # §2 #3a
     evidence_received = "evidence_received"  # §2 #3b
+    evidence_rejected_review = "evidence_rejected_review"  # §2 #6a
+    processing_started = "processing_started"  # §2 #6b
 
 
 async def notify(

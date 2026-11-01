@@ -116,6 +116,19 @@ class ReviewStatus(enum.StrEnum):
     rejected = "rejected"
 
 
+class ProcessingDelayConfig(Base):
+    """Délai de traitement cible par tenant et type de document (notifications.md §4)."""
+
+    __tablename__ = "processing_delay_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    administration_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("administrations.id"), index=True
+    )
+    document_type: Mapped[DocumentType] = mapped_column(Enum(DocumentType, name="document_type"))
+    business_days: Mapped[int] = mapped_column()
+
+
 class User(Base):
     __tablename__ = "users"
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.logging import configure_logging
-from app.routers import evidence, requests
+from app.routers import evidence, issuer, requests
 
 
 def create_app() -> FastAPI:
@@ -14,6 +14,7 @@ def create_app() -> FastAPI:
 
     app.include_router(requests.router)
     app.include_router(evidence.router)
+    app.include_router(issuer.router)
     return app
 
 

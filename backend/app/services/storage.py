@@ -24,6 +24,8 @@ class ObjectStorage(Protocol):
         self, key: str, content_type: str, max_bytes: int, ttl_seconds: int
     ) -> PresignedUpload: ...
 
+    async def presign_download(self, key: str, ttl_seconds: int) -> str: ...
+
     async def size(self, key: str) -> int | None: ...
 
     async def read(self, key: str) -> bytes: ...
@@ -76,6 +78,15 @@ class S3Storage:
             ExpiresIn=ttl_seconds,
         )
         return PresignedUpload(url=post["url"], fields=post["fields"])
+
+    async def presign_download(self, key: str, ttl_seconds: int) -> str:
+        url = await asyncio.to_thread(
+            self._client.generate_presigned_url,
+            "get_object",
+            Params={"Bucket": self._bucket, "Key": key},
+            ExpiresIn=ttl_seconds,
+        )
+        return str(url)
 
     async def size(self, key: str) -> int | None:
         try:

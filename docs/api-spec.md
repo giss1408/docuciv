@@ -105,7 +105,7 @@ Rouvre une réclamation `resolved`/`rejected` si le citoyen n'est pas satisfait 
 ## 2. Administration émettrice
 
 ### `GET /issuer/requests?status=in_review`
-File des demandes en attente de revue de pièce justificative pour le tenant de l'agent connecté.
+File des demandes en attente de revue de pièce justificative pour le tenant de l'agent connecté. Filtres `status` : `in_review` (défaut), `paid`, `in_progress`; pagination `limit` (≤100) / `offset`. Aucune PII ni `payload` dans la liste. Rôles autorisés : `issuer_agent`, `tenant_admin` (jamais `verifier_agent`), tenant actif et émetteur.
 
 ### `GET /issuer/requests/{id}/evidence`
 Retourne une URL de consultation (courte durée) de la pièce justificative pour revue par l'agent — jamais un accès S3 direct.

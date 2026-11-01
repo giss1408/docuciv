@@ -1,0 +1,206 @@
+import uuid
+from datetime import datetime
+from typing import Annotated, Literal
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import AgentPrincipal, get_issuer_agent
+from app.config import Settings, get_settings
+from app.db import tenant_session
+from app.models import (
+    DocumentRequest,
+    DocumentType,
+    NotificationChannel,
+    ReferenceCheckResult,
+    RequestStatus,
+    ReviewStatus,
+    SourceEvidence,
+    UploadStatus,
+)
+from app.services.notifications import EventType, notify
+from app.services.review import estimate_ready_at
+from app.services.state_machine import transition
+from app.services.storage import ObjectStorage, get_storage
+
+router = APIRouter(prefix="/issuer", tags=["issuer"])
+log = structlog.get_logger()
+
+_QUEUE_STATUSES = (RequestStatus.in_review, RequestStatus.in_progress, RequestStatus.paid)
+
+
+class QueueItem(BaseModel):
+    id: uuid.UUID
+    status: RequestStatus
+    document_type: DocumentType
+    reference_document_id: str
+    # `unverifiable`: l'agent doit vérifier lui-même l'existence du document de référence.
+    reference_check: ReferenceCheckResult | None
+    created_at: datetime
+
+
+class EvidenceView(BaseModel):
+    evidence_id: uuid.UUID
+    mime_type: str
+    review_status: ReviewStatus | None
+    view_url: str
+    expires_in: int
+
+
+class ReviewIn(BaseModel):
+    decision: Literal["accepted", "rejected"]
+    review_notes: str | None = Field(default=None, max_length=500)
+
+
+class ReviewOut(BaseModel):
+    request_status: RequestStatus
+    estimated_ready_at: datetime | None
+
+
+@router.get("/requests", response_model=list[QueueItem])
+async def list_requests(
+    agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
+    status_filter: Annotated[RequestStatus, Query(alias="status")] = RequestStatus.in_review,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[QueueItem]:
+    if status_filter not in _QUEUE_STATUSES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "status_not_listable")
+    async with tenant_session(agent.tenant_id) as session:
+        rows = await session.scalars(
+            select(DocumentRequest)
+            .where(
+                DocumentRequest.administration_id == agent.tenant_id,  # en plus de la RLS
+                DocumentRequest.status == status_filter,
+            )
+            .order_by(DocumentRequest.created_at, DocumentRequest.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [
+            QueueItem(
+                id=r.id,
+                status=r.status,
+                document_type=r.document_type,
+                reference_document_id=r.reference_document_id,
+                reference_check=r.reference_check,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+
+
+async def _own_request(
+    session: AsyncSession, request_id: uuid.UUID, agent: AgentPrincipal
+) -> DocumentRequest:
+    request = await session.get(DocumentRequest, request_id)
+    if request is None or request.administration_id != agent.tenant_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "request_not_found")
+    return request
+
+
+@router.get("/requests/{request_id}/evidence", response_model=list[EvidenceView])
+async def view_evidence(
+    request_id: uuid.UUID,
+    agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> list[EvidenceView]:
+    async with tenant_session(agent.tenant_id) as session:
+        await _own_request(session, request_id, agent)
+        evidence = (
+            await session.scalars(
+                select(SourceEvidence)
+                .where(
+                    SourceEvidence.document_request_id == request_id,
+                    SourceEvidence.upload_status == UploadStatus.validated,
+                )
+                .order_by(SourceEvidence.created_at)
+            )
+        ).all()
+    # URLs signées de courte durée; jamais d'accès S3 direct ni permanent (security.md §2bis).
+    views = [
+        EvidenceView(
+            evidence_id=e.id,
+            mime_type=e.mime_type or "",
+            review_status=e.review_status,
+            view_url=await storage.presign_download(
+                e.file_storage_key, settings.evidence_view_ttl_seconds
+            ),
+            expires_in=settings.evidence_view_ttl_seconds,
+        )
+        for e in evidence
+    ]
+    log.info("evidence_viewed", request_id=str(request_id), agent_id=str(agent.agent_id))
+    return views
+
+
+@router.post("/requests/{request_id}/evidence/{evidence_id}/review", response_model=ReviewOut)
+async def review_evidence(
+    request_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    body: ReviewIn,
+    agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ReviewOut:
+    notes = (body.review_notes or "").strip()
+    if body.decision == "rejected" and not notes:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "review_notes_required")
+
+    async with tenant_session(agent.tenant_id) as session:
+        request = await _own_request(session, request_id, agent)
+        evidence = await session.get(SourceEvidence, evidence_id)
+        if evidence is None or evidence.document_request_id != request_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "evidence_not_found")
+        if (
+            request.status != RequestStatus.in_review
+            or evidence.upload_status != UploadStatus.validated
+            or evidence.review_status != ReviewStatus.pending
+        ):
+            raise HTTPException(status.HTTP_409_CONFLICT, "not_reviewable")
+
+        accepted = body.decision == "accepted"
+        estimated: datetime | None = None
+        to = RequestStatus.in_progress if accepted else RequestStatus.rejected
+        moved = await transition(
+            session,
+            request_id,
+            RequestStatus.in_review,
+            to,
+            reason=None if accepted else notes,
+        )
+        if moved is None:  # un autre agent a statué entre-temps
+            raise HTTPException(status.HTTP_409_CONFLICT, "not_reviewable")
+
+        evidence.reviewed_by = agent.agent_id
+        evidence.review_status = ReviewStatus.accepted if accepted else ReviewStatus.rejected
+        evidence.review_notes = notes or None
+        if accepted:
+            estimated = await estimate_ready_at(
+                session, request.administration_id, request.document_type, settings
+            )
+            moved.estimated_ready_at = estimated
+        else:
+            moved.rejection_reason = notes
+
+        await notify(
+            session,
+            request_id=request_id,
+            user_id=request.user_id,
+            event_type=EventType.processing_started
+            if accepted
+            else EventType.evidence_rejected_review,
+            channels=(NotificationChannel.email, NotificationChannel.sms),
+        )
+        result = ReviewOut(request_status=to, estimated_ready_at=estimated)
+
+    log.info(
+        "evidence_reviewed",
+        request_id=str(request_id),
+        decision=body.decision,
+        agent_id=str(agent.agent_id),
+    )
+    return result

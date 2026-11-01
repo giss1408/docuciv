@@ -22,6 +22,7 @@ from app.models import (
 from app.services.antivirus import Scanner, ScanUnavailableError, get_scanner
 from app.services.evidence import ALLOWED_MIME, EvidenceRejectedError, sanitize
 from app.services.notifications import EventType, notify
+from app.services.review import enter_review_if_ready
 from app.services.storage import ObjectStorage, get_storage
 
 router = APIRouter(prefix="/requests/{request_id}/evidence", tags=["evidence"])
@@ -199,6 +200,8 @@ async def complete_upload(
             channels=(NotificationChannel.in_app,),
             discriminator=evidence_id,
         )
+        await session.flush()
+        await enter_review_if_ready(session, request_id)
     log.info("evidence_validated", evidence_id=str(evidence_id))
     return CompleteOut(
         evidence_id=evidence_id, content_hash=content_hash, review_status=ReviewStatus.pending

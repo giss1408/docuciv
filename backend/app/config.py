@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     evidence_max_pixels: int = 40_000_000
     evidence_max_per_request: int = 5
     upload_url_ttl_seconds: int = 300
+    evidence_view_ttl_seconds: int = 120
+    # Délai de traitement si le tenant n'a pas de configuration pour ce type (notifications.md §4).
+    default_processing_business_days: int = 5
     # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
     antivirus: Literal["clamav", "disabled"] = "disabled"
     clamd_host: str = "localhost"
