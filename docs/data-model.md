@@ -96,6 +96,7 @@ Demande initiée par un `User`. Le citoyen fournit en plus du formulaire une ré
 | document_type | enum | acte_naissance, certificat_residence, car, permis_conduire, ... |
 | reference_document_id | string | Numéro/ID du document existant fourni par le citoyen (ex. n° d'acte de naissance à dupliquer/renouveler) |
 | status | enum(`pending_reference_check`,`reference_not_found`,`pending_payment`,`paid`,`in_review`,`in_progress`,`issued`,`rejected`) | Voir `notifications.md` §2/§3 pour le détail de chaque transition et son message associé |
+| reference_check | enum(`found`,`not_found`,`unverifiable`) (nullable) | Résultat du contrôle d'existence (`notifications.md` §3); `unverifiable` = vérification manuelle à faire en `in_review` |
 | rejection_reason | string (nullable) | Renseigné si `status = rejected` (ex. pièce illisible, incohérente, dossier incomplet côté administration) |
 | estimated_ready_at | timestamp (nullable) | Calculé à l'entrée en `in_progress` à partir de la configuration de délai par tenant/type de document (voir `notifications.md` §4) |
 | payload | jsonb | Données du formulaire |
@@ -121,7 +122,7 @@ Trace chaque notification envoyée à un `User` (ou `AdminAgent`/`OwnerUser` pou
 | user_id | UUID (FK User, nullable) | |
 | event_type | enum | Correspond aux lignes du tableau `notifications.md` §2 (ex. `evidence_rejected`, `payment_confirmed`, `document_issued`, `delay_exceeded`, ...) |
 | channel | enum(`email`,`sms`,`push`,`in_app`) | |
-| send_status | enum(`sent`,`failed`,`skipped_duplicate`) | `skipped_duplicate` = bloqué par la clé d'idempotence `(document_request_id, event_type)` |
+| send_status | enum(`pending`,`sent`,`failed`,`skipped_duplicate`) | `pending` = enregistré, en attente d'envoi par le service Notification. | `skipped_duplicate` = bloqué par la clé d'idempotence `(document_request_id, event_type)` |
 | idempotency_key | string | `{document_request_id}:{event_type}` |
 | created_at | timestamp | |
 
