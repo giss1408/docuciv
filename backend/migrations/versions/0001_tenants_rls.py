@@ -4,6 +4,8 @@ Revision ID: 0001
 Revises:
 """
 
+import os
+
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
@@ -18,12 +20,23 @@ APP_ROLE = "docuciv_app"
 TENANT = "NULLIF(current_setting('app.tenant_id', true), '')::uuid"
 
 
+def _app_role_password() -> str:
+    # Hors dev, le mot de passe vient exclusivement du secret injecté; jamais de défaut.
+    password = os.environ.get("DOCUCIV_APP_DB_PASSWORD")
+    if password:
+        return password.replace("'", "''")
+    if os.environ.get("DOCUCIV_ENVIRONMENT", "dev") == "dev":
+        return "docuciv_app"
+    raise RuntimeError("DOCUCIV_APP_DB_PASSWORD requis hors environnement dev")
+
+
 def upgrade() -> None:
     op.execute(
         f"""
         DO $$ BEGIN
           IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN
-            CREATE ROLE {APP_ROLE} LOGIN PASSWORD 'docuciv_app' NOSUPERUSER NOBYPASSRLS;
+            CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{_app_role_password()}'
+              NOSUPERUSER NOBYPASSRLS;
           END IF;
         END $$;
         """

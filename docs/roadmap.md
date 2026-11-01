@@ -8,7 +8,7 @@ Stack : backend Python/FastAPI, 3 apps Flutter (Customer iOS/Android/Web, Admin 
 - [~] CI/CD de base (lint, tests, build Docker) pour le backend — workflow `.github/workflows/backend.yml` fait, déploiement auto vers staging sur `integration` et vers production sur `main`
 - [x] 3 projets Flutter initialisés (Customer, Admin Portal, Owner Backoffice) avec thème/design system partagé
 - [x] `codemagic.yaml` par app Flutter : workflows `integration` (distribution interne Firebase/TestFlight) et `main` (soumission Google Play + App Store) — voir `docs/workflow.md` §5
-- [ ] Environnements dev/staging/production séparés, gestion des secrets (Vault/Secrets Manager + coffre Codemagic pour keystore/certificats)
+- [~] Environnements dev/staging/production séparés (côté code fait : config validée fail-closed hors dev, `.env.example` ; reste : provisionnement Vault/Secrets Manager et coffre Codemagic), gestion des secrets (Vault/Secrets Manager + coffre Codemagic pour keystore/certificats)
 
 ## Phase 1 — Design & UX
 - [ ] Maquettes des parcours citoyen, admin émettrice/requérante, owner
