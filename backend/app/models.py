@@ -1,9 +1,10 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -57,3 +58,80 @@ class AdminAgent(Base):
     email: Mapped[str] = mapped_column(String(320))
     role: Mapped[AgentRole] = mapped_column(Enum(AgentRole, name="agent_role"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserType(enum.StrEnum):
+    citizen = "citizen"
+    business = "business"
+
+
+class DocumentType(enum.StrEnum):
+    acte_naissance = "acte_naissance"
+    certificat_residence = "certificat_residence"
+    car = "car"
+    permis_conduire = "permis_conduire"
+
+
+class RequestStatus(enum.StrEnum):
+    pending_reference_check = "pending_reference_check"
+    reference_not_found = "reference_not_found"
+    pending_payment = "pending_payment"
+    paid = "paid"
+    in_review = "in_review"
+    in_progress = "in_progress"
+    issued = "issued"
+    rejected = "rejected"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type: Mapped[UserType] = mapped_column(Enum(UserType, name="user_type"))
+    full_name: Mapped[str | None] = mapped_column(String(200))
+    company_name: Mapped[str | None] = mapped_column(String(200))
+    phone: Mapped[str] = mapped_column(String(32))
+    email: Mapped[str | None] = mapped_column(String(320))
+    national_id: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DocumentRequest(Base):
+    """`administration_id` est la colonne tenant (administration émettrice) pour la RLS."""
+
+    __tablename__ = "document_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), index=True
+    )
+    administration_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("administrations.id"), index=True
+    )
+    document_type: Mapped[DocumentType] = mapped_column(Enum(DocumentType, name="document_type"))
+    reference_document_id: Mapped[str] = mapped_column(String(64))
+    status: Mapped[RequestStatus] = mapped_column(Enum(RequestStatus, name="request_status"))
+    rejection_reason: Mapped[str | None] = mapped_column(String(500))
+    estimated_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class DocumentRequestStatusHistory(Base):
+    """Append-only: le rôle applicatif n'a que SELECT/INSERT sur cette table."""
+
+    __tablename__ = "document_request_status_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_requests.id"), index=True
+    )
+    from_status: Mapped[RequestStatus | None] = mapped_column(
+        Enum(RequestStatus, name="request_status")
+    )
+    to_status: Mapped[RequestStatus] = mapped_column(Enum(RequestStatus, name="request_status"))
+    reason: Mapped[str | None] = mapped_column(String(500))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

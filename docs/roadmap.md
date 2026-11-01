@@ -18,7 +18,7 @@ Stack : backend Python/FastAPI, 3 apps Flutter (Customer iOS/Android/Web, Admin 
 Pour les phases 2 à 4, chaque tâche suit `docs/workflow.md` §1 : implémentation + smoke tests ciblés avant de passer à la tâche suivante ; pas d'exécution e2e avant la Phase 5 (un backlog de scénarios e2e à couvrir peut être tenu au fil de l'eau, sans les exécuter).
 
 ## Phase 2 — Demande, pièce justificative, signature, QR + vérification offline
-- [ ] Endpoint de demande (`POST /requests`) avec `reference_document_id`, statut initial `pending_reference_check` — smoke test : création + statut
+- [x] Endpoint de demande (`POST /requests`) avec `reference_document_id`, statut initial `pending_reference_check` — smoke test : création + statut
 - [ ] Contrôle d'existence du document référencé avant paiement (`notifications.md` §3) : `reference_not_found` vs `pending_payment` — smoke test : les deux issues, notification envoyée dans chaque cas
 - [ ] Upload de pièce justificative via URL S3 pré-signée (`/requests/{id}/evidence/upload-url` + `/complete`), validation type/taille/hash — smoke test : upload valide accepté + notifié, type/taille invalide rejeté + notifié
 - [ ] File de revue agent émettrice (`GET /issuer/requests?status=in_review`, `POST .../evidence/{id}/review`) — smoke test : accept/reject change bien le statut de la demande et déclenche la notification correspondante

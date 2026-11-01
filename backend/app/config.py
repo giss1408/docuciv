@@ -18,6 +18,8 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://docuciv_owner:docuciv_owner@localhost:5432/docuciv"
     )
     redis_url: str = "redis://localhost:6379/0"
+    # Tarif provisoire (FCFA) en attendant la configuration par tenant/type (concept.md §4).
+    default_amount_due_fcfa: int = 1000
 
     @model_validator(mode="after")
     def _no_dev_defaults_outside_dev(self) -> Self:
