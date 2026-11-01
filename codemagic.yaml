@@ -1,0 +1,122 @@
+# Monorepo: un workflow `integration` (distribution interne) et `main` (soumission store) par app.
+# Voir docs/workflow.md §5. Secrets (keystore, clé App Store Connect) dans les groupes
+# Codemagic ci-dessous, jamais dans le repo. La promotion en production reste humaine.
+
+definitions:
+  flutter_version: &flutter_version 3.24.2
+  triggers:
+    integration: &on_integration
+      events: [push]
+      branch_patterns: [{ pattern: integration, include: true, source: true }]
+    main: &on_main
+      events: [push]
+      branch_patterns: [{ pattern: main, include: true, source: true }]
+  checks: &checks
+    name: Analyze and smoke tests
+    script: |
+      cd packages/docuciv_ui && flutter pub get && flutter analyze && flutter test
+      cd ../../$APP_DIR && flutter pub get && flutter analyze && flutter test
+
+workflows:
+  customer-integration:
+    name: Customer App - integration (internal distribution)
+    working_directory: apps
+    max_build_duration: 60
+    environment:
+      flutter: *flutter_version
+      groups: [customer_android_signing, customer_firebase, app_store_connect]
+      vars: { APP_DIR: customer_app, API_BASE_URL: https://api.staging.docuciv.ci }
+    triggering: *on_integration
+    scripts:
+      - *checks
+      - name: Build Android
+        script: cd $APP_DIR && flutter build appbundle --release --dart-define=API_BASE_URL=$API_BASE_URL
+      - name: Build iOS
+        script: cd $APP_DIR && flutter build ipa --release --dart-define=API_BASE_URL=$API_BASE_URL
+    publishing:
+      firebase:
+        firebase_service_account: $FIREBASE_SERVICE_ACCOUNT
+        android: { app_id: $FIREBASE_ANDROID_APP_ID, groups: [internal-testers] }
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups: [internal-testers]
+
+  customer-production:
+    name: Customer App - main (store submission)
+    working_directory: apps
+    max_build_duration: 60
+    environment:
+      flutter: *flutter_version
+      groups: [customer_android_signing, google_play_production, app_store_connect]
+      vars: { APP_DIR: customer_app, API_BASE_URL: https://api.docuciv.ci }
+    triggering: *on_main
+    scripts:
+      - *checks
+      - name: Build Android
+        script: >
+          cd $APP_DIR && flutter build appbundle --release --obfuscate
+          --split-debug-info=build/symbols --dart-define=API_BASE_URL=$API_BASE_URL
+      - name: Build iOS
+        script: >
+          cd $APP_DIR && flutter build ipa --release --obfuscate
+          --split-debug-info=build/symbols --dart-define=API_BASE_URL=$API_BASE_URL
+    publishing:
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal # promotion vers production = action humaine dans Play Console
+      app_store_connect:
+        auth: production
+        submit_to_testflight: true # publication App Store = validation humaine
+
+  admin-portal-integration:
+    name: Admin Portal - integration (web build)
+    working_directory: apps
+    environment:
+      flutter: *flutter_version
+      vars: { APP_DIR: admin_portal, API_BASE_URL: https://api.staging.docuciv.ci }
+    triggering: *on_integration
+    scripts:
+      - *checks
+      - name: Build web
+        script: cd $APP_DIR && flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    artifacts: [admin_portal/build/web/**]
+
+  admin-portal-production:
+    name: Admin Portal - main (web build)
+    working_directory: apps
+    environment:
+      flutter: *flutter_version
+      vars: { APP_DIR: admin_portal, API_BASE_URL: https://api.docuciv.ci }
+    triggering: *on_main
+    scripts:
+      - *checks
+      - name: Build web
+        script: cd $APP_DIR && flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    artifacts: [admin_portal/build/web/**]
+
+  owner-backoffice-integration:
+    name: Owner Backoffice - integration (web build)
+    working_directory: apps
+    environment:
+      flutter: *flutter_version
+      vars: { APP_DIR: owner_backoffice, API_BASE_URL: https://api.staging.docuciv.ci }
+    triggering: *on_integration
+    scripts:
+      - *checks
+      - name: Build web
+        script: cd $APP_DIR && flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    artifacts: [owner_backoffice/build/web/**]
+
+  owner-backoffice-production:
+    name: Owner Backoffice - main (web build)
+    working_directory: apps
+    environment:
+      flutter: *flutter_version
+      vars: { APP_DIR: owner_backoffice, API_BASE_URL: https://api.docuciv.ci }
+    triggering: *on_main
+    scripts:
+      - *checks
+      - name: Build web
+        script: cd $APP_DIR && flutter build web --release --dart-define=API_BASE_URL=$API_BASE_URL
+    artifacts: [owner_backoffice/build/web/**]
