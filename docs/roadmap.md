@@ -19,7 +19,7 @@ Pour les phases 2 à 4, chaque tâche suit `docs/workflow.md` §1 : implémentat
 
 ## Phase 2 — Demande, pièce justificative, signature, QR + vérification offline
 - [x] Endpoint de demande (`POST /requests`) avec `reference_document_id`, statut initial `pending_reference_check` — smoke test : création + statut
-- [ ] Contrôle d'existence du document référencé avant paiement (`notifications.md` §3) : `reference_not_found` vs `pending_payment` — smoke test : les deux issues, notification envoyée dans chaque cas
+- [x] Contrôle d'existence du document référencé avant paiement (`notifications.md` §3) : `reference_not_found` vs `pending_payment` — smoke test : les deux issues, notification envoyée dans chaque cas
 - [ ] Upload de pièce justificative via URL S3 pré-signée (`/requests/{id}/evidence/upload-url` + `/complete`), validation type/taille/hash — smoke test : upload valide accepté + notifié, type/taille invalide rejeté + notifié
 - [ ] File de revue agent émettrice (`GET /issuer/requests?status=in_review`, `POST .../evidence/{id}/review`) — smoke test : accept/reject change bien le statut de la demande et déclenche la notification correspondante
 - [ ] Service Notification : `NotificationEvent`, idempotence par `(document_request_id, event_type)`, envoi email/SMS/push pour chaque transition du tableau `notifications.md` §2 — smoke test : pas de double-envoi sur rejeu

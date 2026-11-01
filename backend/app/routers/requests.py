@@ -4,7 +4,7 @@ import uuid
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
@@ -15,8 +15,15 @@ from app.models import (
     DocumentRequest,
     DocumentRequestStatusHistory,
     DocumentType,
+    NotificationChannel,
     RequestStatus,
     User,
+)
+from app.services.notifications import EventType, notify
+from app.services.reference_check import (
+    ReferenceChecker,
+    get_reference_checker,
+    run_reference_check,
 )
 
 router = APIRouter(prefix="/requests", tags=["requests"])
@@ -57,6 +64,8 @@ class CreateRequestOut(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateRequestOut)
 async def create_request(
     body: CreateRequestIn,
+    background: BackgroundTasks,
+    checker: Annotated[ReferenceChecker, Depends(get_reference_checker)],
     principal: Annotated[Principal, Depends(get_principal)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CreateRequestOut:
@@ -88,7 +97,18 @@ async def create_request(
                 to_status=RequestStatus.pending_reference_check,
             )
         )
+        await notify(
+            session,
+            request_id=request.id,
+            user_id=principal.user_id,
+            event_type=EventType.request_created,
+            channels=(NotificationChannel.in_app,),
+        )
         request_id = request.id
+
+    # Après la réponse: la demande est renvoyée en pending_reference_check (api-spec.md), le
+    # contrôle la fait ensuite passer à pending_payment ou reference_not_found.
+    background.add_task(run_reference_check, request_id, body.administration_id, checker)
 
     # Pas de PII dans les logs: identifiants techniques uniquement.
     log.info("request_created", request_id=str(request_id), document_type=body.document_type)

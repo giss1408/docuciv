@@ -14,13 +14,30 @@ from app.models import (
     AdministrationRole,
     DocumentRequest,
     DocumentRequestStatusHistory,
+    ReferenceCheckResult,
     RequestStatus,
     TenantStatus,
     User,
     UserType,
 )
+from app.services.reference_check import get_reference_checker
 
 pytestmark = pytest.mark.usefixtures("migrated_db")
+
+
+class _DownChecker:
+    """Vérificateur indisponible: la demande reste en pending_reference_check (état initial)."""
+
+    async def check(self, *_: object) -> ReferenceCheckResult:
+        raise ConnectionError
+
+
+@pytest.fixture(autouse=True)
+def _checker_down():  # type: ignore[no-untyped-def]
+    app.dependency_overrides[get_reference_checker] = lambda: _DownChecker()
+    yield
+    app.dependency_overrides.clear()
+
 
 BODY = {
     "document_type": "acte_naissance",
