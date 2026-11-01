@@ -11,12 +11,13 @@
 | `feature/phase2-reference-check` | Contrôle d'existence avant paiement, machine à états, événements de notification idempotents | Oui |
 | `feature/phase2-evidence-upload` | Upload de pièce par POST S3 pré-signé, MIME réel, EXIF, antivirus | **Non** |
 | `feature/phase2-issuer-review` | File de revue agent, consultation de pièce, accepter/rejeter, `in_review` automatique | **Non** (contient la branche précédente) |
+| `feature/phase2-get-requests` | `GET /requests` et `GET /requests/{id}` avec timeline | **Non** (contient les deux précédentes) |
 
-Tests : 64 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun test e2e n'a été écrit ni lancé, conformément à `docs/workflow.md` §1.
+Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun test e2e n'a été écrit ni lancé, conformément à `docs/workflow.md` §1.
 
 ## 2. À faire tout de suite (humain)
 
-1. **Merger `feature/phase2-issuer-review` dans `integration`.** Elle contient `phase2-evidence-upload`, un seul merge suffit.
+1. **Merger `feature/phase2-get-requests` dans `integration`.** Elle contient `phase2-evidence-upload` et `phase2-issuer-review`, un seul merge suffit.
 2. **Authentifier `gh`** (`gh auth login`) pour repasser par des PR. Les merges Phase 0 et Phase 2 ont été faits en local puis poussés directement sur `integration`, ce que la règle 15 de `AGENTS.md` interdit en temps normal.
 3. **Protéger `integration` et `main` sur GitHub** : PR obligatoire, CI verte requise, pas de push direct.
 4. **Vérifier que la CI GitHub est verte.** `.github/workflows/backend.yml` n'a jamais été vu en exécution.
@@ -49,13 +50,12 @@ Tests : 64 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun tes
 ## 5. Prochaines tâches de code (Phase 2, dans l'ordre proposé)
 
 1. **Service Notification complet** : worker Celery + Redis, transports email/SMS/push, passage de `pending` à `sent`/`failed`. Les événements sont déjà enregistrés de façon idempotente. Dépend des fournisseurs du §4.
-2. **`GET /requests/{id}` avec timeline** et **`GET /requests`** : les données (`DocumentRequestStatusHistory`, `evidence_review_status`) existent déjà. Tâche la plus rapide.
-3. **Job de relance** sur `estimated_ready_at` dépassé (Celery beat) : reprend aussi les demandes bloquées en `pending_reference_check` après une erreur du vérificateur.
-4. **Réclamations** : `POST /reclamations`, `GET /reclamations`, réponse côté émetteur, vue Owner.
-5. **Clés PKI/ECC par tenant** (HSM/KMS) : jamais de clé privée exportable, une clé retirée n'est jamais supprimée.
-6. **`POST /issuer/documents`** : PDF avec QR code, hash, signature, horodatage RFC 3161, stockage S3.
-7. **`GET /documents/{id}/download`**, **`GET /verify/{qr_code_token}`**, **`GET /verify/offline-bundle`**, **`POST /verify/offline-log-sync`**.
-8. **Journalisation append-only** émission et vérification, avec le champ `mode`.
+2. **Job de relance** sur `estimated_ready_at` dépassé (Celery beat) : reprend aussi les demandes bloquées en `pending_reference_check` après une erreur du vérificateur.
+3. **Réclamations** : `POST /reclamations`, `GET /reclamations`, réponse côté émetteur, vue Owner.
+4. **Clés PKI/ECC par tenant** (HSM/KMS) : jamais de clé privée exportable, une clé retirée n'est jamais supprimée.
+5. **`POST /issuer/documents`** : PDF avec QR code, hash, signature, horodatage RFC 3161, stockage S3.
+6. **`GET /documents/{id}/download`**, **`GET /verify/{qr_code_token}`**, **`GET /verify/offline-bundle`**, **`POST /verify/offline-log-sync`**.
+7. **Journalisation append-only** émission et vérification, avec le champ `mode`.
 
 Puis Phase 3 (Mobile Money : adapters Orange/MTN/Moov, webhooks signés). Le webhook de paiement doit appeler `enter_review_if_ready` (`backend/app/services/review.py`) après le passage à `paid`.
 
