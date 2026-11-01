@@ -1,0 +1,30 @@
+name: backend
+on:
+  push:
+    branches: [integration, main, "feature/**", "hotfix/**"]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: docuciv_owner
+          POSTGRES_PASSWORD: docuciv_owner
+          POSTGRES_DB: docuciv
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U docuciv_owner" --health-interval 5s --health-retries 10
+    env:
+      DOCUCIV_TEST_DB: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: mypy app
+      - run: pytest -q   # smoke tests uniquement; e2e exécutés sur integration (docs/workflow.md)
+      - run: docker build -t docuciv-backend .
