@@ -14,16 +14,17 @@ def test_dev_defaults_rejected_outside_dev(env: str) -> None:
         Settings(environment=env)
 
 
-def test_production_accepts_injected_secrets() -> None:
+def test_staging_accepts_injected_secrets() -> None:
+    # Staging tolère le transport de notification simulé; la production le refuse (test_dispatch).
     s = Settings(
-        environment="production",
+        environment="staging",
         database_url="postgresql+asyncpg://app:s3cr3t@db.internal:5432/docuciv",
         migration_database_url="postgresql+asyncpg://own:s3cr3t@db.internal:5432/docuciv",
         redis_url="redis://:pw@cache.internal:6379/0",
         s3_secret_access_key="s3cr3t",
         antivirus="clamav",
     )
-    assert s.environment == "production"
+    assert s.environment == "staging"
 
 
 def test_unknown_environment_rejected() -> None:

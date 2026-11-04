@@ -9,17 +9,18 @@
 | `feature/phase0-*` (4 branches) | Backend FastAPI + RLS, 3 apps Flutter + thème partagé, `codemagic.yaml`, config par environnement | Oui |
 | `feature/phase2-requests` | `POST /requests`, historique de statuts en ajout seul | Oui |
 | `feature/phase2-reference-check` | Contrôle d'existence avant paiement, machine à états, événements de notification idempotents | Oui |
-| `feature/phase2-evidence-upload` | Upload de pièce par POST S3 pré-signé, MIME réel, EXIF, antivirus | **Non** |
-| `feature/phase2-issuer-review` | File de revue agent, consultation de pièce, accepter/rejeter, `in_review` automatique | **Non** (contient la branche précédente) |
-| `feature/phase2-get-requests` | `GET /requests` et `GET /requests/{id}` avec timeline | **Non** (contient les deux précédentes) |
-| `feature/phase2-relance-job` | Job de relance (délai dépassé, contrôle bloqué), migration 0006 | **Non** (contient les précédentes) |
-| `feature/phase2-reclamations` | Réclamations citoyen + émetteur, migration 0007 | **Non** (contient la précédente) |
+| `feature/phase2-evidence-upload` | Upload de pièce par POST S3 pré-signé, MIME réel, EXIF, antivirus | Oui |
+| `feature/phase2-issuer-review` | File de revue agent, consultation de pièce, accepter/rejeter, `in_review` automatique | Oui |
+| `feature/phase2-get-requests` | `GET /requests` et `GET /requests/{id}` avec timeline | Oui |
+| `feature/phase2-relance-job` | Job de relance (délai dépassé, contrôle bloqué), migration 0006 | Oui |
+| `feature/phase2-reclamations` | Réclamations citoyen + émetteur, migration 0007 | Oui (merge du 4 nov. 2026, avec toutes les branches ci-dessus) |
+| `feature/phase2-notifications-mock` | Envoi simulé des notifications, migration 0008 | Oui |
 
 Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun test e2e n'a été écrit ni lancé, conformément à `docs/workflow.md` §1.
 
 ## 2. À faire tout de suite (humain)
 
-1. **Merger `feature/phase2-reclamations` dans `integration`.** Elle contient toutes les branches Phase 2 non mergées (upload, revue, `GET /requests`, relance), un seul merge suffit.
+1. ~~Merger les branches Phase 2 dans `integration`~~ fait le 4 nov. 2026 (merge local poussé directement, voir point 2).
 2. **Authentifier `gh`** (`gh auth login`) pour repasser par des PR. Les merges Phase 0 et Phase 2 ont été faits en local puis poussés directement sur `integration`, ce que la règle 15 de `AGENTS.md` interdit en temps normal.
 3. **Protéger `integration` et `main` sur GitHub** : PR obligatoire, CI verte requise, pas de push direct.
 4. **Vérifier que la CI GitHub est verte.** `.github/workflows/backend.yml` n'a jamais été vu en exécution.
@@ -51,7 +52,7 @@ Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun tes
 
 ## 5. Prochaines tâches de code (Phase 2, dans l'ordre proposé)
 
-1. **Service Notification complet** : worker Celery + Redis, transports email/SMS/push, passage de `pending` à `sent`/`failed`. Les événements sont déjà enregistrés de façon idempotente. Dépend des fournisseurs du §4.
+1. **Service Notification** : l'envoi `pending` → `sent`/`failed` existe avec un transport **simulé** (`app/services/dispatch.py`, `python -m app.services.dispatch`, migration 0008, refusé en production). Restent : worker Celery + Redis, vrais transports, rendu des messages (`notifications.md` §2, non fait car aucun contenu n'est généré). Initialement : worker Celery + Redis, transports email/SMS/push, passage de `pending` à `sent`/`failed`. Les événements sont déjà enregistrés de façon idempotente. Dépend des fournisseurs du §4.
 2. ~~**Job de relance**~~ **Code fait** sur `feature/phase2-relance-job` (non commitée, non mergée) : `app/services/followup.py`, migration 0006, filtre `GET /issuer/requests?overdue=true`. Reste à le brancher sur Celery beat (`python -m app.services.followup` en attendant) ; ses tests DB (`tests/test_followup.py`) passent (73 passed, 2 skipped S3). La fonction SECURITY DEFINER suppose que le rôle de migration contourne la RLS (vrai en dev, à vérifier en staging).
 3. ~~**Réclamations**~~ **Faites sauf la vue Owner** (branche `feature/phase2-reclamations`, migration 0007) : création avec SLA (48 h, 24 h pour `payment_issue`/`fraud_suspicion`), liste, réouverture (14 j, `reclamation_reopen_days`), file et réponse côté émetteur, notifications. Reste `GET /owner/reclamations` (il faut l'auth Owner et `PlatformAuditLog`) : les réclamations libres (sans demande) ont `tenant_id` NULL, donc aucun tenant ne les voit, et personne ne peut encore y répondre.
 4. **Clés PKI/ECC par tenant** (HSM/KMS) : jamais de clé privée exportable, une clé retirée n'est jamais supprimée.
