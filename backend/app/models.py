@@ -104,6 +104,31 @@ class NotificationSendStatus(enum.StrEnum):
     skipped_duplicate = "skipped_duplicate"
 
 
+class UploadStatus(enum.StrEnum):
+    awaiting_upload = "awaiting_upload"
+    validated = "validated"
+    rejected = "rejected"
+
+
+class ReviewStatus(enum.StrEnum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
+class ProcessingDelayConfig(Base):
+    """Délai de traitement cible par tenant et type de document (notifications.md §4)."""
+
+    __tablename__ = "processing_delay_configs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    administration_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("administrations.id"), index=True
+    )
+    document_type: Mapped[DocumentType] = mapped_column(Enum(DocumentType, name="document_type"))
+    business_days: Mapped[int] = mapped_column()
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -137,6 +162,8 @@ class DocumentRequest(Base):
     )
     rejection_reason: Mapped[str | None] = mapped_column(String(500))
     estimated_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Posé une fois par le job de relance: idempotence + file de relance de l'agent.
+    overdue_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -181,3 +208,87 @@ class NotificationEvent(Base):
     )
     idempotency_key: Mapped[str] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SourceEvidence(Base):
+    """Pièce justificative (photo/scan). Fichier sur S3 uniquement, jamais en base.
+
+    `upload_status` couvre la validation technique (complete); `review_status` n'est renseigné
+    qu'une fois le fichier validé et attend l'agent émetteur (AGENTS.md règle 12).
+    """
+
+    __tablename__ = "source_evidence"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_request_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_requests.id"), index=True
+    )
+    file_storage_key: Mapped[str] = mapped_column(String(300))
+    declared_mime_type: Mapped[str] = mapped_column(String(64))
+    declared_size_bytes: Mapped[int] = mapped_column()
+    mime_type: Mapped[str | None] = mapped_column(String(64))  # type réel, après validation
+    content_hash: Mapped[str | None] = mapped_column(String(80))
+    upload_status: Mapped[UploadStatus] = mapped_column(Enum(UploadStatus, name="upload_status"))
+    upload_error: Mapped[str | None] = mapped_column(String(64))
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_agents.id")
+    )
+    review_status: Mapped[ReviewStatus | None] = mapped_column(
+        Enum(ReviewStatus, name="review_status")
+    )
+    review_notes: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReclamationCategory(enum.StrEnum):
+    delay = "delay"
+    document_error = "document_error"
+    payment_issue = "payment_issue"
+    evidence_rejected_wrongly = "evidence_rejected_wrongly"
+    fraud_suspicion = "fraud_suspicion"
+    other = "other"
+
+
+class ReclamationStatus(enum.StrEnum):
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    rejected = "rejected"
+    reopened = "reopened"
+
+
+class Reclamation(Base):
+    """Réclamation citoyen (notifications.md §6). `tenant_id` = administration de la demande liée.
+
+    NULL pour une réclamation libre ou transverse: invisible des tenants, réservée à l'Owner.
+    """
+
+    __tablename__ = "reclamations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), index=True
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("administrations.id"), index=True
+    )
+    document_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_requests.id")
+    )
+    category: Mapped[ReclamationCategory] = mapped_column(
+        Enum(ReclamationCategory, name="reclamation_category")
+    )
+    description: Mapped[str] = mapped_column(String(2000))
+    status: Mapped[ReclamationStatus] = mapped_column(
+        Enum(ReclamationStatus, name="reclamation_status")
+    )
+    sla_response_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    handled_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_agents.id")
+    )
+    response: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

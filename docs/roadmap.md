@@ -20,12 +20,12 @@ Pour les phases 2 à 4, chaque tâche suit `docs/workflow.md` §1 : implémentat
 ## Phase 2 — Demande, pièce justificative, signature, QR + vérification offline
 - [x] Endpoint de demande (`POST /requests`) avec `reference_document_id`, statut initial `pending_reference_check` — smoke test : création + statut
 - [x] Contrôle d'existence du document référencé avant paiement (`notifications.md` §3) : `reference_not_found` vs `pending_payment` — smoke test : les deux issues, notification envoyée dans chaque cas
-- [ ] Upload de pièce justificative via URL S3 pré-signée (`/requests/{id}/evidence/upload-url` + `/complete`), validation type/taille/hash — smoke test : upload valide accepté + notifié, type/taille invalide rejeté + notifié
-- [ ] File de revue agent émettrice (`GET /issuer/requests?status=in_review`, `POST .../evidence/{id}/review`) — smoke test : accept/reject change bien le statut de la demande et déclenche la notification correspondante
+- [x] Upload de pièce justificative via URL S3 pré-signée (`/requests/{id}/evidence/upload-url` + `/complete`), validation type/taille/hash — smoke test : upload valide accepté + notifié, type/taille invalide rejeté + notifié
+- [x] File de revue agent émettrice (`GET /issuer/requests?status=in_review`, `POST .../evidence/{id}/review`) — smoke test : accept/reject change bien le statut de la demande et déclenche la notification correspondante
 - [ ] Service Notification : `NotificationEvent`, idempotence par `(document_request_id, event_type)`, envoi email/SMS/push pour chaque transition du tableau `notifications.md` §2 — smoke test : pas de double-envoi sur rejeu
-- [ ] `DocumentRequestStatusHistory` + endpoint `GET /requests/{id}` avec timeline — smoke test : historique complet et dans l'ordre
-- [ ] Job de relance sur délai dépassé (`estimated_ready_at`) — smoke test : notification + alerte agent déclenchées après dépassement simulé
-- [ ] Endpoints réclamation (`POST /reclamations`, `GET /reclamations`, `POST /issuer/reclamations/{id}/respond`, `GET /owner/reclamations`) — smoke test : cycle open → resolved avec notification de réponse
+- [x] `DocumentRequestStatusHistory` + endpoint `GET /requests/{id}` avec timeline — smoke test : historique complet et dans l'ordre
+- [~] Job de relance sur délai dépassé (`estimated_ready_at`) — code et smoke tests verts (`app/services/followup.py`) ; reste le déclenchement Celery beat — smoke test : notification + alerte agent déclenchées après dépassement simulé
+- [~] Endpoints réclamation (`POST /reclamations`, `GET /reclamations`, `POST /reclamations/{id}/reopen`, `GET /issuer/reclamations`, `POST /issuer/reclamations/{id}/respond` faits ; `GET /owner/reclamations` reste, bloqué par l'auth Owner) — smoke test : cycle open → resolved avec notification de réponse
 - [ ] Génération de paire de clés PKI/ECC par tenant (HSM/KMS) — smoke test : clé générée, jamais exportable en clair
 - [ ] Endpoint d'émission/signature (`POST /issuer/documents`) générant le **PDF final** avec QR code intégré, stockage PDF sur S3 — smoke test : PDF produit, signature valide sur le hash
 - [ ] Endpoint `GET /documents/{id}/download` (URL signée, courte durée) — smoke test : URL expire après délai

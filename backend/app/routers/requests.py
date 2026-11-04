@@ -1,12 +1,13 @@
 import json
 import re
 import uuid
+from datetime import datetime
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.auth import Principal, get_principal
 from app.config import Settings, get_settings
@@ -17,6 +18,9 @@ from app.models import (
     DocumentType,
     NotificationChannel,
     RequestStatus,
+    ReviewStatus,
+    SourceEvidence,
+    UploadStatus,
     User,
 )
 from app.services.notifications import EventType, notify
@@ -117,3 +121,88 @@ async def create_request(
         status=RequestStatus.pending_reference_check,
         amount_due=settings.default_amount_due_fcfa,
     )
+
+
+class HistoryItem(BaseModel):
+    # Pas de `reason`: il peut porter des notes internes (voir rejection_reason pour le citoyen).
+    to_status: RequestStatus
+    changed_at: datetime
+
+
+class RequestDetail(BaseModel):
+    id: uuid.UUID
+    status: RequestStatus
+    document_type: DocumentType
+    reference_document_id: str
+    evidence_review_status: ReviewStatus | None
+    rejection_reason: str | None
+    estimated_ready_at: datetime | None
+    created_at: datetime
+    history: list[HistoryItem]
+
+
+class RequestSummary(BaseModel):
+    id: uuid.UUID
+    status: RequestStatus
+    document_type: DocumentType
+    reference_document_id: str
+    estimated_ready_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@router.get("", response_model=list[RequestSummary])
+async def list_requests(
+    principal: Annotated[Principal, Depends(get_principal)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[RequestSummary]:
+    """« Mes démarches »: les demandes du citoyen authentifié, plus récentes d'abord."""
+    async with user_session(principal.user_id) as session:
+        rows = await session.scalars(
+            select(DocumentRequest)
+            .where(DocumentRequest.user_id == principal.user_id)  # en plus de la RLS
+            .order_by(DocumentRequest.created_at.desc(), DocumentRequest.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [RequestSummary.model_validate(r, from_attributes=True) for r in rows]
+
+
+@router.get("/{request_id}", response_model=RequestDetail)
+async def get_request(
+    request_id: uuid.UUID,
+    principal: Annotated[Principal, Depends(get_principal)],
+) -> RequestDetail:
+    async with user_session(principal.user_id) as session:
+        request = await session.get(DocumentRequest, request_id)
+        # Demande d'un autre citoyen: invisible par RLS -> 404, sans révéler son existence.
+        if request is None or request.user_id != principal.user_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "request_not_found")
+        history = await session.scalars(
+            select(DocumentRequestStatusHistory)
+            .where(DocumentRequestStatusHistory.document_request_id == request_id)
+            .order_by(DocumentRequestStatusHistory.changed_at)
+        )
+        # Pièce la plus récente passée la validation technique (les uploads échoués n'ont pas
+        # de review_status).
+        review_status = await session.scalar(
+            select(SourceEvidence.review_status)
+            .where(
+                SourceEvidence.document_request_id == request_id,
+                SourceEvidence.upload_status == UploadStatus.validated,
+            )
+            .order_by(SourceEvidence.uploaded_at.desc())
+            .limit(1)
+        )
+        return RequestDetail(
+            id=request.id,
+            status=request.status,
+            document_type=request.document_type,
+            reference_document_id=request.reference_document_id,
+            evidence_review_status=review_status,
+            rejection_reason=request.rejection_reason,
+            estimated_ready_at=request.estimated_ready_at,
+            created_at=request.created_at,
+            history=[HistoryItem(to_status=h.to_status, changed_at=h.changed_at) for h in history],
+        )
