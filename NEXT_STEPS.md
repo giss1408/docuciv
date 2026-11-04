@@ -50,7 +50,7 @@ Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun tes
 ## 5. Prochaines tâches de code (Phase 2, dans l'ordre proposé)
 
 1. **Service Notification complet** : worker Celery + Redis, transports email/SMS/push, passage de `pending` à `sent`/`failed`. Les événements sont déjà enregistrés de façon idempotente. Dépend des fournisseurs du §4.
-2. **Job de relance** sur `estimated_ready_at` dépassé (Celery beat) : reprend aussi les demandes bloquées en `pending_reference_check` après une erreur du vérificateur.
+2. ~~**Job de relance**~~ **Code fait** sur `feature/phase2-relance-job` (non commitée, non mergée) : `app/services/followup.py`, migration 0006, filtre `GET /issuer/requests?overdue=true`. Reste à le brancher sur Celery beat (`python -m app.services.followup` en attendant) ; ses tests DB (`tests/test_followup.py`) passent (73 passed, 2 skipped S3). La fonction SECURITY DEFINER suppose que le rôle de migration contourne la RLS (vrai en dev, à vérifier en staging).
 3. **Réclamations** : `POST /reclamations`, `GET /reclamations`, réponse côté émetteur, vue Owner.
 4. **Clés PKI/ECC par tenant** (HSM/KMS) : jamais de clé privée exportable, une clé retirée n'est jamais supprimée.
 5. **`POST /issuer/documents`** : PDF avec QR code, hash, signature, horodatage RFC 3161, stockage S3.

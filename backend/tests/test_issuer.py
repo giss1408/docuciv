@@ -173,6 +173,7 @@ async def test_queue_lists_only_own_tenant(storage: MemoryStorage) -> None:
         "reference_document_id",
         "reference_check",
         "created_at",
+        "overdue_notified_at",
     }  # pas de PII ni de payload
 
 

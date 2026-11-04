@@ -162,6 +162,8 @@ class DocumentRequest(Base):
     )
     rejection_reason: Mapped[str | None] = mapped_column(String(500))
     estimated_ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Posé une fois par le job de relance: idempotence + file de relance de l'agent.
+    overdue_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

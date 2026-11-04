@@ -23,6 +23,7 @@ class EventType(enum.StrEnum):
     evidence_received = "evidence_received"  # §2 #3b
     evidence_rejected_review = "evidence_rejected_review"  # §2 #6a
     processing_started = "processing_started"  # §2 #6b
+    request_overdue = "request_overdue"  # §2 #10
 
 
 async def notify(

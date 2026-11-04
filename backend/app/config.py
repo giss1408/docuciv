@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     evidence_view_ttl_seconds: int = 120
     # Délai de traitement si le tenant n'a pas de configuration pour ce type (notifications.md §4).
     default_processing_business_days: int = 5
+    # Une demande en pending_reference_check plus vieille que ça est reprise par le job de relance.
+    reference_check_stale_minutes: int = 15
     # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
     antivirus: Literal["clamav", "disabled"] = "disabled"
     clamd_host: str = "localhost"

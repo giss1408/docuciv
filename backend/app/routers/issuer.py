@@ -40,6 +40,8 @@ class QueueItem(BaseModel):
     # `unverifiable`: l'agent doit vérifier lui-même l'existence du document de référence.
     reference_check: ReferenceCheckResult | None
     created_at: datetime
+    # Posé par le job de relance quand le délai estimé a été dépassé (file de relance).
+    overdue_notified_at: datetime | None
 
 
 class EvidenceView(BaseModel):
@@ -63,19 +65,25 @@ class ReviewOut(BaseModel):
 @router.get("/requests", response_model=list[QueueItem])
 async def list_requests(
     agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
-    status_filter: Annotated[RequestStatus, Query(alias="status")] = RequestStatus.in_review,
+    status_filter: Annotated[RequestStatus | None, Query(alias="status")] = None,
+    overdue: Annotated[bool, Query()] = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[QueueItem]:
+    if status_filter is None:
+        status_filter = RequestStatus.in_progress if overdue else RequestStatus.in_review
     if status_filter not in _QUEUE_STATUSES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "status_not_listable")
+    conditions = [
+        DocumentRequest.administration_id == agent.tenant_id,  # en plus de la RLS
+        DocumentRequest.status == status_filter,
+    ]
+    if overdue:
+        conditions.append(DocumentRequest.overdue_notified_at.is_not(None))
     async with tenant_session(agent.tenant_id) as session:
         rows = await session.scalars(
             select(DocumentRequest)
-            .where(
-                DocumentRequest.administration_id == agent.tenant_id,  # en plus de la RLS
-                DocumentRequest.status == status_filter,
-            )
+            .where(*conditions)
             .order_by(DocumentRequest.created_at, DocumentRequest.id)
             .limit(limit)
             .offset(offset)
@@ -88,6 +96,7 @@ async def list_requests(
                 reference_document_id=r.reference_document_id,
                 reference_check=r.reference_check,
                 created_at=r.created_at,
+                overdue_notified_at=r.overdue_notified_at,
             )
             for r in rows
         ]
