@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     reference_check_stale_minutes: int = 15
     # Fenêtre pendant laquelle le citoyen peut rouvrir une réclamation close (notifications.md §6).
     reclamation_reopen_days: int = 14
+    # Seul transport existant: simulé (aucun message réellement envoyé).
+    notification_transport: Literal["mock"] = "mock"
     # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
     antivirus: Literal["clamav", "disabled"] = "disabled"
     clamd_host: str = "localhost"
@@ -60,6 +62,8 @@ class Settings(BaseSettings):
                 )
         if self.s3_secret_access_key == "minioadmin" or self.antivirus == "disabled":
             raise ValueError("stockage/antivirus de dev interdits hors environnement dev")
+        if self.environment == "production" and self.notification_transport == "mock":
+            raise ValueError("transport de notification simulé interdit en production")
         return self
 
 
