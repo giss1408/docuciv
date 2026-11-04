@@ -24,20 +24,23 @@ class EventType(enum.StrEnum):
     evidence_rejected_review = "evidence_rejected_review"  # §2 #6a
     processing_started = "processing_started"  # §2 #6b
     request_overdue = "request_overdue"  # §2 #10
+    reclamation_received = "reclamation_received"  # §6 étape 2
+    reclamation_answered = "reclamation_answered"  # §6 étape 4
 
 
 async def notify(
     session: AsyncSession,
     *,
-    request_id: uuid.UUID,
+    request_id: uuid.UUID | None,
     user_id: uuid.UUID,
     event_type: EventType,
     channels: tuple[NotificationChannel, ...],
     discriminator: uuid.UUID | None = None,
 ) -> None:
     """`discriminator` distingue les occurrences légitimes répétées d'un même événement
-    (ex. plusieurs uploads échoués d'une même demande, chacun doit être notifié)."""
-    key = f"{request_id}:{event_type}" + (f":{discriminator}" if discriminator else "")
+    (ex. plusieurs uploads échoués d'une même demande, chacun doit être notifié).
+    `request_id` est None pour une réclamation libre (sans demande liée)."""
+    key = f"{request_id or '-'}:{event_type}" + (f":{discriminator}" if discriminator else "")
     for channel in channels:
         inserted = await session.scalar(
             insert(NotificationEvent)

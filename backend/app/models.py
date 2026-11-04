@@ -239,3 +239,56 @@ class SourceEvidence(Base):
     )
     review_notes: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ReclamationCategory(enum.StrEnum):
+    delay = "delay"
+    document_error = "document_error"
+    payment_issue = "payment_issue"
+    evidence_rejected_wrongly = "evidence_rejected_wrongly"
+    fraud_suspicion = "fraud_suspicion"
+    other = "other"
+
+
+class ReclamationStatus(enum.StrEnum):
+    open = "open"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    rejected = "rejected"
+    reopened = "reopened"
+
+
+class Reclamation(Base):
+    """Réclamation citoyen (notifications.md §6). `tenant_id` = administration de la demande liée.
+
+    NULL pour une réclamation libre ou transverse: invisible des tenants, réservée à l'Owner.
+    """
+
+    __tablename__ = "reclamations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), index=True
+    )
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("administrations.id"), index=True
+    )
+    document_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("document_requests.id")
+    )
+    category: Mapped[ReclamationCategory] = mapped_column(
+        Enum(ReclamationCategory, name="reclamation_category")
+    )
+    description: Mapped[str] = mapped_column(String(2000))
+    status: Mapped[ReclamationStatus] = mapped_column(
+        Enum(ReclamationStatus, name="reclamation_status")
+    )
+    sla_response_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    handled_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_agents.id")
+    )
+    response: Mapped[str | None] = mapped_column(String(2000))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

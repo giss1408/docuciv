@@ -25,7 +25,7 @@ Pour les phases 2 à 4, chaque tâche suit `docs/workflow.md` §1 : implémentat
 - [ ] Service Notification : `NotificationEvent`, idempotence par `(document_request_id, event_type)`, envoi email/SMS/push pour chaque transition du tableau `notifications.md` §2 — smoke test : pas de double-envoi sur rejeu
 - [x] `DocumentRequestStatusHistory` + endpoint `GET /requests/{id}` avec timeline — smoke test : historique complet et dans l'ordre
 - [~] Job de relance sur délai dépassé (`estimated_ready_at`) — code et smoke tests verts (`app/services/followup.py`) ; reste le déclenchement Celery beat — smoke test : notification + alerte agent déclenchées après dépassement simulé
-- [ ] Endpoints réclamation (`POST /reclamations`, `GET /reclamations`, `POST /issuer/reclamations/{id}/respond`, `GET /owner/reclamations`) — smoke test : cycle open → resolved avec notification de réponse
+- [~] Endpoints réclamation (`POST /reclamations`, `GET /reclamations`, `POST /reclamations/{id}/reopen`, `GET /issuer/reclamations`, `POST /issuer/reclamations/{id}/respond` faits ; `GET /owner/reclamations` reste, bloqué par l'auth Owner) — smoke test : cycle open → resolved avec notification de réponse
 - [ ] Génération de paire de clés PKI/ECC par tenant (HSM/KMS) — smoke test : clé générée, jamais exportable en clair
 - [ ] Endpoint d'émission/signature (`POST /issuer/documents`) générant le **PDF final** avec QR code intégré, stockage PDF sur S3 — smoke test : PDF produit, signature valide sur le hash
 - [ ] Endpoint `GET /documents/{id}/download` (URL signée, courte durée) — smoke test : URL expire après délai

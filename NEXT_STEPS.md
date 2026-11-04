@@ -12,12 +12,14 @@
 | `feature/phase2-evidence-upload` | Upload de pièce par POST S3 pré-signé, MIME réel, EXIF, antivirus | **Non** |
 | `feature/phase2-issuer-review` | File de revue agent, consultation de pièce, accepter/rejeter, `in_review` automatique | **Non** (contient la branche précédente) |
 | `feature/phase2-get-requests` | `GET /requests` et `GET /requests/{id}` avec timeline | **Non** (contient les deux précédentes) |
+| `feature/phase2-relance-job` | Job de relance (délai dépassé, contrôle bloqué), migration 0006 | **Non** (contient les précédentes) |
+| `feature/phase2-reclamations` | Réclamations citoyen + émetteur, migration 0007 | **Non** (contient la précédente) |
 
 Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun test e2e n'a été écrit ni lancé, conformément à `docs/workflow.md` §1.
 
 ## 2. À faire tout de suite (humain)
 
-1. **Merger `feature/phase2-get-requests` dans `integration`.** Elle contient `phase2-evidence-upload` et `phase2-issuer-review`, un seul merge suffit.
+1. **Merger `feature/phase2-reclamations` dans `integration`.** Elle contient toutes les branches Phase 2 non mergées (upload, revue, `GET /requests`, relance), un seul merge suffit.
 2. **Authentifier `gh`** (`gh auth login`) pour repasser par des PR. Les merges Phase 0 et Phase 2 ont été faits en local puis poussés directement sur `integration`, ce que la règle 15 de `AGENTS.md` interdit en temps normal.
 3. **Protéger `integration` et `main` sur GitHub** : PR obligatoire, CI verte requise, pas de push direct.
 4. **Vérifier que la CI GitHub est verte.** `.github/workflows/backend.yml` n'a jamais été vu en exécution.
@@ -51,7 +53,7 @@ Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun tes
 
 1. **Service Notification complet** : worker Celery + Redis, transports email/SMS/push, passage de `pending` à `sent`/`failed`. Les événements sont déjà enregistrés de façon idempotente. Dépend des fournisseurs du §4.
 2. ~~**Job de relance**~~ **Code fait** sur `feature/phase2-relance-job` (non commitée, non mergée) : `app/services/followup.py`, migration 0006, filtre `GET /issuer/requests?overdue=true`. Reste à le brancher sur Celery beat (`python -m app.services.followup` en attendant) ; ses tests DB (`tests/test_followup.py`) passent (73 passed, 2 skipped S3). La fonction SECURITY DEFINER suppose que le rôle de migration contourne la RLS (vrai en dev, à vérifier en staging).
-3. **Réclamations** : `POST /reclamations`, `GET /reclamations`, réponse côté émetteur, vue Owner.
+3. ~~**Réclamations**~~ **Faites sauf la vue Owner** (branche `feature/phase2-reclamations`, migration 0007) : création avec SLA (48 h, 24 h pour `payment_issue`/`fraud_suspicion`), liste, réouverture (14 j, `reclamation_reopen_days`), file et réponse côté émetteur, notifications. Reste `GET /owner/reclamations` (il faut l'auth Owner et `PlatformAuditLog`) : les réclamations libres (sans demande) ont `tenant_id` NULL, donc aucun tenant ne les voit, et personne ne peut encore y répondre.
 4. **Clés PKI/ECC par tenant** (HSM/KMS) : jamais de clé privée exportable, une clé retirée n'est jamais supprimée.
 5. **`POST /issuer/documents`** : PDF avec QR code, hash, signature, horodatage RFC 3161, stockage S3.
 6. **`GET /documents/{id}/download`**, **`GET /verify/{qr_code_token}`**, **`GET /verify/offline-bundle`**, **`POST /verify/offline-log-sync`**.

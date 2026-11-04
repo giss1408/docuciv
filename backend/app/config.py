@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     default_processing_business_days: int = 5
     # Une demande en pending_reference_check plus vieille que ça est reprise par le job de relance.
     reference_check_stale_minutes: int = 15
+    # Fenêtre pendant laquelle le citoyen peut rouvrir une réclamation close (notifications.md §6).
+    reclamation_reopen_days: int = 14
     # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
     antivirus: Literal["clamav", "disabled"] = "disabled"
     clamd_host: str = "localhost"

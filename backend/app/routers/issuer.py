@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 import structlog
@@ -15,12 +15,16 @@ from app.models import (
     DocumentRequest,
     DocumentType,
     NotificationChannel,
+    Reclamation,
+    ReclamationCategory,
+    ReclamationStatus,
     ReferenceCheckResult,
     RequestStatus,
     ReviewStatus,
     SourceEvidence,
     UploadStatus,
 )
+from app.routers.reclamations import ReclamationOut
 from app.services.notifications import EventType, notify
 from app.services.review import estimate_ready_at
 from app.services.state_machine import transition
@@ -213,3 +217,91 @@ async def review_evidence(
         agent_id=str(agent.agent_id),
     )
     return result
+
+
+_OPEN_RECLAMATIONS = (
+    ReclamationStatus.open,
+    ReclamationStatus.in_progress,
+    ReclamationStatus.reopened,
+)
+
+
+class IssuerReclamation(ReclamationOut):
+    handled_by: uuid.UUID | None
+
+
+class RespondIn(BaseModel):
+    status: Literal["resolved", "rejected"]
+    response: str = Field(min_length=1, max_length=2000)
+
+
+@router.get("/reclamations", response_model=list[IssuerReclamation])
+async def list_reclamations(
+    agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
+    status_filter: Annotated[ReclamationStatus | None, Query(alias="status")] = None,
+    category: ReclamationCategory | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[IssuerReclamation]:
+    """File des réclamations du tenant, les plus proches de leur SLA d'abord."""
+    conditions = [Reclamation.tenant_id == agent.tenant_id]  # en plus de la RLS
+    conditions.append(
+        Reclamation.status == status_filter
+        if status_filter
+        else Reclamation.status.in_(_OPEN_RECLAMATIONS)
+    )
+    if category:
+        conditions.append(Reclamation.category == category)
+    async with tenant_session(agent.tenant_id) as session:
+        rows = await session.scalars(
+            select(Reclamation)
+            .where(*conditions)
+            .order_by(Reclamation.sla_response_due_at, Reclamation.id)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [
+            IssuerReclamation(**ReclamationOut.of(r).model_dump(), handled_by=r.handled_by)
+            for r in rows
+        ]
+
+
+@router.post("/reclamations/{reclamation_id}/respond", response_model=IssuerReclamation)
+async def respond_to_reclamation(
+    reclamation_id: uuid.UUID,
+    body: RespondIn,
+    agent: Annotated[AgentPrincipal, Depends(get_issuer_agent)],
+) -> IssuerReclamation:
+    async with tenant_session(agent.tenant_id) as session:
+        r = await session.scalar(
+            select(Reclamation)
+            .where(Reclamation.id == reclamation_id, Reclamation.tenant_id == agent.tenant_id)
+            .with_for_update()
+        )
+        if r is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "reclamation_not_found")
+        if r.status not in _OPEN_RECLAMATIONS:  # déjà répondue (ex. par un autre agent)
+            raise HTTPException(status.HTTP_409_CONFLICT, "already_answered")
+        r.status = ReclamationStatus(body.status)
+        r.response = body.response.strip()
+        r.handled_by = agent.agent_id
+        # Explicite: l'onupdate serveur expirerait l'attribut, non relisible hors greenlet.
+        r.updated_at = datetime.now(UTC)
+        await session.flush()
+        await notify(
+            session,
+            request_id=r.document_request_id,
+            user_id=r.user_id,
+            event_type=EventType.reclamation_answered,
+            channels=(NotificationChannel.email, NotificationChannel.sms),
+            # Une réclamation rouverte peut recevoir plusieurs réponses, chacune notifiée.
+            discriminator=uuid.uuid4(),
+        )
+        out = IssuerReclamation(**ReclamationOut.of(r).model_dump(), handled_by=r.handled_by)
+    log.info(
+        "reclamation_answered",
+        reclamation_id=str(reclamation_id),
+        status=body.status,
+        agent_id=str(agent.agent_id),
+    )
+    return out
