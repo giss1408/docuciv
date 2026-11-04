@@ -14,6 +14,7 @@ from typing import Protocol
 import structlog
 from sqlalchemy import text
 
+from app.config import get_settings
 from app.db import get_engine
 from app.models import NotificationChannel
 
@@ -60,16 +61,18 @@ def get_transport() -> Transport:
     return MockTransport()
 
 
+def manual_channels() -> frozenset[NotificationChannel]:
+    """Canaux que le dispatcher ne touche pas: l'agent les envoie lui-même (outbox WhatsApp)."""
+    if get_settings().notification_transport == "whatsapp_manual":
+        return frozenset({NotificationChannel.sms})
+    return frozenset()
+
+
 async def dispatch_pending(transport: Transport | None = None) -> dict[str, int]:
     transport = transport or get_transport()
     counts = {"sent": 0, "failed": 0, "skipped": 0}
+    manual = manual_channels()
     async with get_engine().connect() as conn:
-        rows = (
-            await conn.execute(
-                text("SELECT * FROM docuciv_pending_notifications(:n)"), {"n": BATCH_SIZE}
-            )
-        ).all()
-        await conn.commit()
 
         async def cas(event_id: object, expected: str, new: str) -> bool:
             ok = await conn.scalar(
@@ -79,27 +82,39 @@ async def dispatch_pending(transport: Transport | None = None) -> dict[str, int]
             await conn.commit()
             return bool(ok)
 
-        for row in rows:
-            # Prendre la main avant d'envoyer: un autre worker concurrent n'envoie pas deux fois.
-            if not await cas(row.id, "pending", "sent"):
-                counts["skipped"] += 1
-                continue
-            message = Outgoing(
-                event_id=str(row.id),
-                user_id=str(row.user_id) if row.user_id else None,
-                request_id=str(row.document_request_id) if row.document_request_id else None,
-                event_type=row.event_type,
-                channel=NotificationChannel(row.channel),
-            )
-            try:
-                # in_app: rien à pousser, la notification est consultable dans l'application.
-                if message.channel != NotificationChannel.in_app:
-                    await transport.send(message)
-                counts["sent"] += 1
-            except Exception:
-                log.warning("notification_send_failed", event_id=message.event_id)
-                await cas(row.id, "sent", "failed")
-                counts["failed"] += 1
+        # Draine la file par lots: chaque ligne traitée quitte `pending` (sent/failed), et les
+        # canaux manuels sont exclus par la requête, donc la boucle se termine.
+        while True:
+            rows = (
+                await conn.execute(
+                    text("SELECT * FROM docuciv_pending_notifications(:n, CAST(:skip AS text[]))"),
+                    {"n": BATCH_SIZE, "skip": sorted(str(c) for c in manual)},
+                )
+            ).all()
+            await conn.commit()
+            if not rows:
+                break
+            for row in rows:
+                # Prendre la main avant d'envoyer: un worker concurrent n'envoie pas deux fois.
+                if not await cas(row.id, "pending", "sent"):
+                    counts["skipped"] += 1
+                    continue
+                message = Outgoing(
+                    event_id=str(row.id),
+                    user_id=str(row.user_id) if row.user_id else None,
+                    request_id=str(row.document_request_id) if row.document_request_id else None,
+                    event_type=row.event_type,
+                    channel=NotificationChannel(row.channel),
+                )
+                try:
+                    # in_app: rien à pousser, la notification est consultable dans l'application.
+                    if message.channel != NotificationChannel.in_app:
+                        await transport.send(message)
+                    counts["sent"] += 1
+                except Exception:
+                    log.warning("notification_send_failed", event_id=message.event_id)
+                    await cas(row.id, "sent", "failed")
+                    counts["failed"] += 1
     log.info("notifications_dispatched", **counts)
     return counts
 

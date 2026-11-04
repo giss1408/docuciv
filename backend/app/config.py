@@ -34,16 +34,36 @@ class Settings(BaseSettings):
     default_processing_business_days: int = 5
     # Une demande en pending_reference_check plus vieille que ça est reprise par le job de relance.
     reference_check_stale_minutes: int = 15
+    # Démo: connexion jetable par code d'accès + jetons signés. Désactivée par défaut, refusée en
+    # production. Remplacée par l'OIDC (docs/architecture.md §1) avant tout usage réel.
+    demo_mode: bool = False
+    demo_access_code: str | None = None
+    demo_token_secret: str | None = None
+    demo_token_ttl_minutes: int = 480
+    demo_citizen_phone: str = "+2250100000000"
+    # Origines autorisées (CORS) pour les apps Flutter web, ex. '["https://demo.example.ci"]'.
+    cors_origins: list[str] = []
     # Fenêtre pendant laquelle le citoyen peut rouvrir une réclamation close (notifications.md §6).
     reclamation_reopen_days: int = 14
-    # Seul transport existant: simulé (aucun message réellement envoyé).
-    notification_transport: Literal["mock"] = "mock"
+    # `mock`: rien n'est envoyé. `whatsapp_manual`: les SMS restent « à envoyer » dans l'outbox
+    # de l'Admin Portal, où l'agent les envoie lui-même via un lien WhatsApp prérempli (démo).
+    notification_transport: Literal["mock", "whatsapp_manual"] = "mock"
     # ClamAV (clamd). `disabled` n'est toléré qu'en dev: jamais de contournement silencieux.
     antivirus: Literal["clamav", "disabled"] = "disabled"
     clamd_host: str = "localhost"
     clamd_port: int = 3310
     # Tarif provisoire (FCFA) en attendant la configuration par tenant/type (concept.md §4).
     default_amount_due_fcfa: int = 1000
+
+    @model_validator(mode="after")
+    def _demo_mode_is_safe(self) -> Self:
+        if not self.demo_mode:
+            return self
+        if self.environment == "production":
+            raise ValueError("demo_mode interdit en production")
+        if len(self.demo_token_secret or "") < 32 or len(self.demo_access_code or "") < 8:
+            raise ValueError("demo_mode exige demo_token_secret (32+) et demo_access_code (8+)")
+        return self
 
     @model_validator(mode="after")
     def _no_dev_defaults_outside_dev(self) -> Self:
@@ -62,8 +82,11 @@ class Settings(BaseSettings):
                 )
         if self.s3_secret_access_key == "minioadmin" or self.antivirus == "disabled":
             raise ValueError("stockage/antivirus de dev interdits hors environnement dev")
-        if self.environment == "production" and self.notification_transport == "mock":
-            raise ValueError("transport de notification simulé interdit en production")
+        if self.environment == "production" and self.notification_transport in (
+            "mock",
+            "whatsapp_manual",
+        ):
+            raise ValueError("transport de notification simulé ou manuel interdit en production")
         return self
 
 

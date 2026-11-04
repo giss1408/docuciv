@@ -62,6 +62,20 @@ Tests : 68 passent, 2 ignorés (`tests/test_s3_storage.py`, voir §3). Aucun tes
 
 Puis Phase 3 (Mobile Money : adapters Orange/MTN/Moov, webhooks signés). Le webhook de paiement doit appeler `enter_review_if_ready` (`backend/app/services/review.py`) après le passage à `paid`.
 
+## 5bis. Démo à l'administration (en cours, branche `feature/demo-whatsapp-outbox`)
+
+Choix : envoi **WhatsApp manuel** (le backend rend le message et un lien `wa.me` prérempli, l'agent l'envoie depuis l'Admin Portal), login jetable, premier document `acte_naissance`. Thèmes : Customer vert, Admin bleu, Owner orange.
+
+- [x] Textes des notifications (`app/services/messages.py`), sans PII.
+- [x] `GET /issuer/outbox`, `POST /issuer/outbox/{id}/ack` ; `NOTIFICATION_TRANSPORT=whatsapp_manual` laisse les SMS « à envoyer » (migration 0009). Refusé en production.
+- [x] Couleurs par app dans `docuciv_ui`.
+- [ ] Onglet Outbox dans l'Admin Portal (liste + bouton « Envoyer sur WhatsApp » qui ouvre le lien puis appelle `ack`).
+- [ ] Paiement **démo** explicite (bandeau « DEMO », désactivé hors environnement démo ; règle 4 d'`AGENTS.md`).
+- [ ] Émission PDF + QR avec clé logicielle locale marquée « DEMO », `GET /verify/{token}`.
+- [x] Login jetable: `POST /demo/login` (code d accès, jetons HMAC signés et expirants, `python -m app.demo` pour le seed), actif seulement avec `DOCUCIV_DEMO_MODE=true`, refusé en production. Pas de rate limiting.
+- [ ] Écrans Customer (demande, pièce, timeline, PDF) et Admin (file de revue, outbox, vérification).
+- [ ] Déploiement staging + script de données de démo + déroulé de 10 minutes.
+
 ## 6. Dettes techniques connues
 
 - Le contrôle d'existence tourne en `BackgroundTasks` FastAPI, pas en Celery. Si le processus s'arrête, la demande reste en `pending_reference_check` jusqu'au job de relance.
